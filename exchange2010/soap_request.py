@@ -146,29 +146,28 @@ def get_user_availability(email):
        <SuggestionsViewOptions>...</SuggestionsViewOptions>
     </GetUserAvailabilityRequest>
     """
-    # import code; code.interact(local=locals())
 
     now = datetime.datetime.now()
     two_weeks_from_now = now + datetime.timedelta(days=21)
 
     root =  M.GetUserAvailabilityRequest(
-                T.TimeZone(
-                    T.Bias(u'0'),
-                    T.StandardTime(
-                        T.Bias('0'),
-                        T.Time(now.strftime(EXCHANGE_DATETIME_FORMAT)),
-                        T.DayOrder(str(now.day)),
-                        T.Month(str(now.month)),
-                        T.DayOfWeek(u'Monday')
-                    ),
-                    T.DaylightTime(
-                        T.Bias(u'0'),
-                        T.Time(now.strftime(EXCHANGE_DATETIME_FORMAT)),
-                        T.DayOrder(str(now.day)),
-                        T.Month(str(now.month)),
-                        T.DayOfWeek(u'Monday')
-                    )
-                ),
+                # T.TimeZone(
+                #     T.Bias(u'0'),
+                #     T.StandardTime(
+                #         T.Bias('0'),
+                #         T.Time(now.strftime(EXCHANGE_DATETIME_FORMAT)),
+                #         T.DayOrder(str(now.day)),
+                #         T.Month(str(now.month)),
+                #         T.DayOfWeek(u'Wednesday')
+                #     ),
+                #     T.DaylightTime(
+                #         T.Bias(u'0'),
+                #         T.Time(now.strftime(EXCHANGE_DATETIME_FORMAT)),
+                #         T.DayOrder(str(now.day)),
+                #         T.Month(str(now.month)),
+                #         T.DayOfWeek(u'Wednesday')
+                #     )
+                # ),
                 M.MailboxDataArray(
                     T.MailboxData(
                         T.Email(
@@ -183,11 +182,11 @@ def get_user_availability(email):
                         T.StartTime(now.strftime(EXCHANGE_DATETIME_FORMAT)),
                         T.EndTime(two_weeks_from_now.strftime(EXCHANGE_DATETIME_FORMAT))
                     ),
-                    T.RequestedView(u'DetailedMerged')
+                    T.MergedFreeBusyIntervalInMinutes(u'30'),
+                    T.RequestedView(u'FreeBusy')
                 )
             )
     return root
-
 
 def get_calendar_items(format=u"Default", calendar_id=u'calendar', start=None, end=None, max_entries=999999, delegate_for=None):
   start = start.strftime(EXCHANGE_DATETIME_FORMAT)

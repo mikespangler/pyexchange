@@ -55,7 +55,6 @@ class Exchange2010Service(ExchangeServiceSOAP):
     # If the request succeeded, we should see a <m:ResponseCode>NoError</m:ResponseCode>
     # somewhere in the response. if we don't (a) see the tag or (b) it doesn't say "NoError"
     # then flip out
-
     response_codes = xml_tree.xpath(u'//m:ResponseCode', namespaces=soap_request.NAMESPACES)
 
     if not response_codes:
@@ -157,16 +156,32 @@ class Exchange2010RoomAvailability(object):
     def __init__(self, service, room_email):
         self.service = service
         body = soap_request.get_user_availability(room_email)
-        # body = open('./req.xml').read()
-        # import code; code.interact(local=locals())
-
-        response_xml = self.service.send(body)
-        # import code; code.interact(local=locals())
-
-        # self.roomLists = self._parse_all_roomLists(response_xml)
-        # log.debug("Parsed room lists %s" % self.roomLists)
-
+        response_xml = self.service.send(body, user_availability_req=True)
+        self.room_availabilities = self._parse_availabilities(response_xml)
+        log.debug("Parsed room availabilities %s" % self.room_availabilities)
         return
+
+    def _parse_availabilities(self, response):
+        roomsDict = list()
+        rooms = response.xpath(u'//m:FreeBusyView/t:CalendarEventArray/t:CalendarEvent', namespaces=soap_request.NAMESPACES)
+
+        for room in rooms:
+            roomsDict.append(self._parse_availability(room))
+        return roomsDict
+
+    def _parse_availability(self, response):
+        property_map = {
+          'Start': {
+            u'xpath': u't:StartTime',
+          },
+          'End': {
+            u'xpath': u't:EndTime',
+          },
+          'BusyType': {
+            u'xpath': u't:BusyType',
+          },
+        }
+        return self.service._xpath_to_dict(element=response, property_map=property_map, namespace_map=soap_request.NAMESPACES)
 
 
 class Exchange2010Rooms(object):

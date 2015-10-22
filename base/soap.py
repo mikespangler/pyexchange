@@ -9,7 +9,7 @@ import logging
 from lxml import etree
 from lxml.builder import ElementMaker
 from datetime import datetime
-from pytz import utc
+from pytz import utc, timezone
 
 from ..exceptions import FailedExchangeException
 
@@ -30,9 +30,8 @@ class ExchangeServiceSOAP(object):
   def __init__(self, connection):
     self.connection = connection
 
-  def send(self, xml, headers=None, retries=4, timeout=30, encoding="utf-8"):
-    request_xml = self._wrap_soap_xml_request(xml)
-    # import code; code.interact(local=locals())
+  def send(self, xml, headers=None, retries=4, timeout=30, encoding="utf-8", user_availability_req=False):
+    request_xml = self._wrap_soap_xml_request(xml, user_availability_req)
     log.info(etree.tostring(request_xml, encoding=encoding, pretty_print=True))
     response = self._send_soap_request(request_xml, headers=headers, retries=retries, timeout=timeout, encoding=encoding)
     return self._parse(response, encoding=encoding)
@@ -64,15 +63,17 @@ class ExchangeServiceSOAP(object):
 
   def _send_soap_request(self, xml, headers=None, retries=2, timeout=30, encoding="utf-8"):
     body = etree.tostring(xml, encoding=encoding)
-
     response = self.connection.send(body, headers, retries, timeout)
     return response
 
-  def _exchange_header(self):
-    return T.RequestServerVersion({u'Version': u'Exchange2010'})
+  def _exchange_header(self, user_availability_req):
+      if user_availability_req:
+          return user_availability_header()
+      else:
+          return S.Header(T.RequestServerVersion({u'Version': u'Exchange2010'}))
 
-  def _wrap_soap_xml_request(self, exchange_xml):
-    root = S.Envelope(S.Header(self._exchange_header()), S.Body(exchange_xml))
+  def _wrap_soap_xml_request(self, exchange_xml, user_availability_req):
+    root = S.Envelope(self._exchange_header(user_availability_req), S.Body(exchange_xml))
     return root
 
   def _parse_date(self, date_string):
@@ -136,3 +137,115 @@ class ExchangeServiceSOAP(object):
           result[key] = result_for_node
 
     return result
+
+def user_availability_header():
+    """
+      <soap:Header>
+        <t:RequestServerVersion Version="Exchange2010" />
+        <t:TimeZoneContext>
+          <t:TimeZoneDefinition Name="(UTC-08:00) Pacific Time (US &amp; Canada)" Id="Pacific Standard Time">
+            <t:Periods>
+              <t:Period Bias="P0DT8H0M0.0S" Name="Standard" Id="Std" />
+              <t:Period Bias="P0DT7H0M0.0S" Name="Daylight" Id="Dlt/1" />
+              <t:Period Bias="P0DT7H0M0.0S" Name="Daylight" Id="Dlt/2007" />
+            </t:Periods>
+            <t:TransitionsGroups>
+              <t:TransitionsGroup Id="0">
+                <t:RecurringDayTransition>
+                  <t:To Kind="Period">Dlt/1</t:To>
+                  <t:TimeOffset>P0DT2H0M0.0S</t:TimeOffset>
+                  <t:Month>4</t:Month>
+                  <t:DayOfWeek>Sunday</t:DayOfWeek>
+                  <t:Occurrence>1</t:Occurrence>
+                </t:RecurringDayTransition>
+                <t:RecurringDayTransition>
+                  <t:To Kind="Period">Std</t:To>
+                  <t:TimeOffset>P0DT2H0M0.0S</t:TimeOffset>
+                  <t:Month>10</t:Month>
+                  <t:DayOfWeek>Sunday</t:DayOfWeek>
+                  <t:Occurrence>-1</t:Occurrence>
+                </t:RecurringDayTransition>
+              </t:TransitionsGroup>
+              <t:TransitionsGroup Id="1">
+                <t:RecurringDayTransition>
+                  <t:To Kind="Period">Dlt/2007</t:To>
+                  <t:TimeOffset>P0DT2H0M0.0S</t:TimeOffset>
+                  <t:Month>3</t:Month>
+                  <t:DayOfWeek>Sunday</t:DayOfWeek>
+                  <t:Occurrence>2</t:Occurrence>
+                </t:RecurringDayTransition>
+                <t:RecurringDayTransition>
+                  <t:To Kind="Period">Std</t:To>
+                  <t:TimeOffset>P0DT2H0M0.0S</t:TimeOffset>
+                  <t:Month>11</t:Month>
+                  <t:DayOfWeek>Sunday</t:DayOfWeek>
+                  <t:Occurrence>1</t:Occurrence>
+                </t:RecurringDayTransition>
+              </t:TransitionsGroup>
+            </t:TransitionsGroups>
+            <t:Transitions>
+              <t:Transition>
+                <t:To Kind="Group">0</t:To>
+              </t:Transition>
+              <t:AbsoluteDateTransition>
+                <t:To Kind="Group">1</t:To>
+                <t:DateTime>2007-01-01T08:00:00.000Z</t:DateTime>
+              </t:AbsoluteDateTransition>
+            </t:Transitions>
+          </t:TimeZoneDefinition>
+        </t:TimeZoneContext>
+      </soap:Header>
+    """
+
+    header = S.Header(
+                T.RequestServerVersion({u'Version': u'Exchange2010'}),
+                T.TimeZoneContext(
+                    T.TimeZoneDefinition({
+                        u'Name': u'(UTC-08:00) Pacific Time (US &amp; Canada)',
+                        u'Id': u'Pacific Standard Time',
+                        },
+                        T.Periods(
+                            T.Period({
+                                u'Bias':u'P0DT8H0M0.0S',
+                                u'Name':u'Standard',
+                                u'Id'  :u'Std',
+                            }),
+                            T.Period({
+                                u'Bias':u'P0DT7H0M0.0S',
+                                u'Name':u'Daylight',
+                                u'Id'  :u'Dlt/1',
+                            }),
+                        ),
+                        T.TransitionsGroups(
+                            T.TransitionsGroup(
+                                {u'Id':u'0'},
+                                T.RecurringDayTransition(
+                                    T.To({u'Kind':u'Period'}, u'Dlt/1'),
+                                    T.TimeOffset(u'P0DT2H0M0.0S'),
+                                    T.Month(u'3'),
+                                    T.DayOfWeek(u'Sunday'),
+                                    T.Occurrence(u'1')
+                                ),
+                                T.RecurringDayTransition(
+                                    T.To({u'Kind':u'Period'}, u'Std'),
+                                    T.TimeOffset(u'P0DT2H0M0.0S'),
+                                    T.Month(u'11'),
+                                    T.DayOfWeek(u'Sunday'),
+                                    T.Occurrence(u'1')
+                                )
+                            )
+                        ),
+                        T.Transitions(
+                            T.Transition(
+                                T.To({u'Kind':u'Group'}, u'0')
+                            ),
+                            T.AbsoluteDateTransition(
+                                T.To({u'Kind':u'Group'}, u'0'),
+                                T.DateTime(u'2015-03-01T08:00:00.000Z')
+                            )
+                        )
+                    )
+                 )
+              )
+
+    return header
